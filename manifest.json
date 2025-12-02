@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Dashboard",
+  "version": "1.0",
+  "description": "View, manage, and organize all open tabs across all windows.",
+  "permissions": [
+    "tabs"
+  ],
+  "action": {
+    "default_title": "Open Tab Dashboard"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+  
+}
