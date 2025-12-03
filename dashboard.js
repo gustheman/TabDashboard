@@ -2,7 +2,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const windowsContainer = document.getElementById('windows-container');
     const statsEl = document.getElementById('stats');
 
-    // 0. Inject CSS for Memory Stats Badges AND Drag & Drop Styles
+    // 0. Inject CSS for Memory Stats Badges, Drag & Drop, AND Pinned Tabs
     const style = document.createElement('style');
     style.textContent = `
         .status-badge {
@@ -39,13 +39,23 @@ document.addEventListener('DOMContentLoaded', async () => {
             opacity: 0.5;
             background-color: #e5e7eb;
         }
+        /* Pinned Tab Styles */
+        .pinned-icon {
+            width: 14px;
+            height: 14px;
+            margin-right: 6px;
+            color: #666;
+            flex-shrink: 0;
+            transform: rotate(45deg);
+        }
     `;
     document.head.appendChild(style);
 
-    // 1. Get all tabs AND all windows
-    const [tabs, allWindows] = await Promise.all([
+    // 1. Get all tabs AND all windows AND synced devices
+    const [tabs, allWindows, devices] = await Promise.all([
         chrome.tabs.query({}),
-        chrome.windows.getAll()
+        chrome.windows.getAll(),
+        chrome.sessions.getDevices()
     ]);
     
     // 2. Group tabs and Calculate Stats
@@ -93,6 +103,23 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         if (count === 0) cardElement.remove();
     };
+
+    // --- Real-time Listener for Tab Removal ---
+    chrome.tabs.onRemoved.addListener((tabId, removeInfo) => {
+        const tabEl = document.getElementById(`tab-${tabId}`);
+        // If the element exists (it wasn't removed by our button click handler already)
+        if (tabEl) {
+            tabEl.remove();
+            
+            // Find the window card to update counts
+            // removeInfo.windowId tells us which window the tab belonged to
+            const windowCard = document.getElementById(`window-${removeInfo.windowId}`);
+            if (windowCard) {
+                updateWindowUI(windowCard);
+            }
+        }
+    });
+    // ---------------------------------------
 
     // 3. Render Windows
     allWindows.forEach((win, index) => {
@@ -202,6 +229,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             img.className = 'tab-icon';
             img.onerror = () => { img.style.display = 'none'; };
             
+            // --- PINNED INDICATOR ---
+            if (tab.pinned) {
+                const pinIcon = document.createElement('div');
+                pinIcon.innerHTML = `
+                    <svg viewBox="0 0 24 24" fill="currentColor" class="pinned-icon">
+                        <path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" />
+                    </svg>
+                `;
+                content.appendChild(pinIcon.firstElementChild);
+            }
+            // ------------------------
+
             const title = document.createElement('span');
             title.className = 'tab-title';
             title.textContent = tab.title;
@@ -261,5 +300,96 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         card.appendChild(list);
         windowsContainer.appendChild(card);
+    });
+
+    // 4. Render Remote Devices
+    devices.forEach(device => {
+        device.sessions.forEach((session) => {
+            // A session can be a single 'tab' or a 'window' containing tabs
+            let sessionTabs = [];
+            let sessionTitle = device.deviceName;
+
+            if (session.window) {
+                sessionTabs = session.window.tabs;
+                sessionTitle += ` (Window)`;
+            } else if (session.tab) {
+                sessionTabs = [session.tab];
+                sessionTitle += ` (Single Tab)`;
+            }
+
+            if (sessionTabs.length === 0) return;
+
+            // Create Card
+            const card = document.createElement('div');
+            card.className = 'window-card';
+            // Optional: visual distinction for remote devices
+            card.style.borderTop = "4px solid #8b5cf6"; // Purple accent for remote
+
+            // Header
+            const header = document.createElement('div');
+            header.className = 'window-header';
+            header.innerHTML = `<span>${sessionTitle}</span> <span>${sessionTabs.length} tabs</span>`;
+            card.appendChild(header);
+
+            // List
+            const list = document.createElement('ul');
+            list.className = 'tab-list';
+
+            sessionTabs.forEach(tab => {
+                const li = document.createElement('li');
+                li.className = 'tab-item';
+                
+                // Enable Dragging FROM remote TO local (opens link locally)
+                li.draggable = true;
+                li.addEventListener('dragstart', (e) => {
+                    li.classList.add('dragging');
+                    // We can't move the actual tab ID, but we can pass the data to create a new one
+                    // However, our current drop logic expects a tabId. 
+                    // Simple drag-start visual only for now unless we refactor drop logic.
+                });
+                li.addEventListener('dragend', () => li.classList.remove('dragging'));
+
+                const content = document.createElement('div');
+                content.className = 'tab-content';
+                content.title = tab.url; // Tooltip shows URL for remote tabs
+
+                // Remote tabs don't always have favIconUrl populated reliably in the session object
+                // We use a generic globe icon if missing
+                const faviconUrl = tab.favIconUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzY2NiI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTA 1MCAxMi40OCAyIDIyeS00LjQ4LTEwLTEwUzE3LjUyIDIgMTIgMnptLTEgMTcuOTNjLTIuMjUtLjI1LTQuMjUtMS40My01LjU5LTMuMjRDLDUuMzYgMTUuMzYgNS4xIDEzLjcgNS4xIDEyYzAtLjUuMDQtLjk5LjEyLTEuNDcuNy0uMDYuNzctLjAxIDEuMTUuMTIuMzguMTMuNy4zOC45NC43My4yNC4zNS4zOC43Ni40IDEuMTkuMTMuMjUuMy40OC41LjY4LjIuMi40NS4zNC43NS40NC4zLjEuNjQuMTUuOTguMTUuMzQgMCAuNjgtLjA1IDEuMDEtLjE1em0yLjkyLS4yMWMtLjM3LS40MS0uNzYtLjgxLTEuMTUtMS4xOS0uNC0uMzgtLjgxLS43NC0xLjIyLTEuMDgtLjQxLS4zMy0uODMtLjYzLTEuMjUtLjg5LS40Mi0uMjYtLjg1LS40OC0xLjI4LS42NS0uNDMtLjE3LS44Ni0uMy0xLjI5LS4zOXYtMS4wMmMuNDMuMDkuODYuMjIgMS4yOS4zOS40My4xNy44Ni4zOSAxLjI4LjY1LjQyLjI2Ljg0LjU2IDEuMjUuODkuNDEuMzMuODIuNjkgMS4yMiAxLjA4LjM5LjM4Ljc4Ljc4IDEuMTUgMS4xOXpNMTIgMmEyIDIgMCAwIDEgMiAyYTIgMiAwIDAgMS0yIDJNMjAgMTJjMCAuNi0uMDggMS4xOS0uMjIgMS43Ni0uMDYuMjQtLjEyLjQ4-.19.NzEtLjIzLjI0-.47.NDYtLjczLjY3LS4yNS4yMS0uNTIuNC0uNzkuNTgtLjEzLS41Mi0uMzEtMS4wMy0uNTMtMS41My0uMjItLjQ5-.NDctLjk3-.NzYtMS40My0uMjktLjQ2-.NjEtLjktLjk2LTEuMzEtLjM1LS40MS0uNzMtLjc5LTEuMTItMS4xNHYtMS4wNGMuMzkuMzYuNzcuNzQgMS4xMiAxLjE0LjM1LjQxLjY3Ljg1Ljk2IDEuMzEuMjkuNDYuNTQuOTQuNzYgMS40My4yMi41LjQuOTkuNTMgMS41M3oiLz48L3N2Zz4=';
+
+                const img = document.createElement('img');
+                img.src = faviconUrl;
+                img.className = 'tab-icon';
+                
+                const title = document.createElement('span');
+                title.className = 'tab-title';
+                title.textContent = tab.title || tab.url;
+
+                content.appendChild(img);
+                content.appendChild(title);
+                
+                // Badge for Remote
+                const badge = document.createElement('span');
+                badge.className = 'status-badge';
+                badge.textContent = 'Remote';
+                badge.style.backgroundColor = '#f3e8ff';
+                badge.style.color = '#7e22ce';
+                badge.style.border = '1px solid #d8b4fe';
+                content.appendChild(badge);
+
+                // Click Action: Open URL in new local tab
+                content.addEventListener('click', () => {
+                    chrome.tabs.create({ url: tab.url });
+                });
+
+                // No Close Button for Remote Tabs (API limitation)
+
+                li.appendChild(content);
+                list.appendChild(li);
+            });
+
+            card.appendChild(list);
+            windowsContainer.appendChild(card);
+        });
     });
 });

@@ -4,7 +4,8 @@
   "version": "1.0",
   "description": "View, manage, and organize all open tabs across all windows.",
   "permissions": [
-    "tabs"
+    "tabs",
+    "sessions"
   ],
   "action": {
     "default_title": "Open Tab Dashboard"
