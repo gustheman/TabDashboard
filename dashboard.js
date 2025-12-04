@@ -116,7 +116,13 @@ document.addEventListener('DOMContentLoaded', () => {
             .card-exit { opacity: 0; transform: scale(0.95); }
             .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: 600; white-space: nowrap; }
             .status-active { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-            /* ... other styles ... */
+            .status-suspended { background-color: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+            .status-loading { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+            .window-card.drag-over { border: 2px dashed #2563eb; background-color: #eff6ff; transform: scale(1.02); transition: all 0.2s; }
+            .tab-item.dragging { opacity: 0.5; background-color: #e5e7eb; }
+            .pinned-icon-wrapper { width: 24px; height: 24px; margin-right: 6px; color: #666; flex-shrink: 0; transform: rotate(45deg); display: inline-flex; align-items: center; }
+            .pinned-icon-svg { width: 100%; height: 100%; }
+            .opener-icon { width: 12px; height: 12px; margin-right: 4px; color: #999; flex-shrink: 0; }
         `;
         if (!document.head.querySelector('style#dynamic-styles')) {
             style.id = 'dynamic-styles';
