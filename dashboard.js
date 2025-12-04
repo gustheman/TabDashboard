@@ -125,7 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 
                 const content = document.createElement('div');
                 content.className = 'tab-content';
-                content.title = tab.title;
                 
                 const faviconUrl = tab.favIconUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2NjYyI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAgLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyeiIvPg==';
                 const img = document.createElement('img');
@@ -140,15 +139,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
 
                 // --- Opener Tab Indicator ---
+                let fullTitle = tab.title;
                 if (tab.openerTabId) {
                     const openerTab = tabsById.get(tab.openerTabId);
                     if (openerTab) {
-                        const openerIcon = document.createElement('div');
-                        openerIcon.title = `Opened from: ${openerTab.title}`;
-                        openerIcon.innerHTML = `<svg class="opener-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19,15l-6,6l-1.42-1.42L15.17,16H4V4h2v10h9.17l-3.59-3.58L13,9l6,6z"/></svg>`;
-                        content.appendChild(openerIcon.firstElementChild);
+                        const openerIconWrapper = document.createElement('span');
+                        openerIconWrapper.className = 'opener-icon';
+                        openerIconWrapper.title = `Opened from: ${openerTab.title}`;
+                        openerIconWrapper.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19,15l-6,6l-1.42-1.42L15.17,16H4V4h2v10h9.17l-3.59-3.58L13,9l6,6z"/></svg>`;
+                        content.appendChild(openerIconWrapper);
+
+                        // Add to the main tooltip as well
+                        fullTitle += `\nOpened from: ${openerTab.title}`;
                     }
                 }
+                content.title = fullTitle;
                 // --------------------------
 
                 const title = document.createElement('span');
