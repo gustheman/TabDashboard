@@ -9,7 +9,20 @@ document.addEventListener('DOMContentLoaded', () => {
     const getDomain = (url) => {
         if (!url) return 'Other';
         try {
-            const hostname = new URL(url).hostname;
+            const urlObj = new URL(url);
+            const hostname = urlObj.hostname;
+
+            if (hostname === 'docs.google.com') {
+                if (urlObj.pathname.startsWith('/document/')) {
+                    return 'Google Docs';
+                } else if (urlObj.pathname.startsWith('/spreadsheets/')) {
+                    return 'Google Sheets';
+                } else if (urlObj.pathname.startsWith('/presentation/')) {
+                    return 'Google Slides';
+                }
+                return 'Google Drive';
+            }
+
             return hostname.replace(/^www\./, '');
         } catch (e) {
             const protocol = url.split(':')[0];
