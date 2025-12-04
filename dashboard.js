@@ -42,11 +42,20 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = faviconUrl;
         img.className = 'tab-icon';
         img.onerror = () => { img.style.display = 'none'; };
+        content.appendChild(img);
         
         if (tab.pinned) {
-            const pinIcon = document.createElement('div');
-            pinIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" class="pinned-icon"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" /></svg>`;
-            content.appendChild(pinIcon.firstElementChild);
+            const svgNS = "http://www.w3.org/2000/svg";
+            const svg = document.createElementNS(svgNS, "svg");
+            svg.setAttribute("viewBox", "0 0 24 24");
+            svg.setAttribute("fill", "currentColor");
+            svg.classList.add("pinned-icon");
+
+            const path = document.createElementNS(svgNS, "path");
+            path.setAttribute("d", "M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z");
+            svg.appendChild(path);
+
+            content.appendChild(svg);
         }
 
         let fullTitle = tab.title;
@@ -67,7 +76,6 @@ document.addEventListener('DOMContentLoaded', () => {
         title.className = 'tab-title';
         title.textContent = tab.title;
 
-        content.appendChild(img);
         content.appendChild(title);
 
         const badge = document.createElement('span');
