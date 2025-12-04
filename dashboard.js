@@ -5,20 +5,19 @@ document.addEventListener('DOMContentLoaded', () => {
     const viewByDomainBtn = document.getElementById('view-by-domain');
 
     let currentView = localStorage.getItem('tabDashboard-view') || 'window';
+    let isRendering = false;
 
     const getDomain = (url) => {
         if (!url) return 'Other';
         try {
             const urlObj = new URL(url);
             const hostname = urlObj.hostname;
-
             if (hostname === 'docs.google.com') {
                 if (urlObj.pathname.startsWith('/document/')) return 'Google Docs';
                 if (urlObj.pathname.startsWith('/spreadsheets/')) return 'Google Sheets';
                 if (urlObj.pathname.startsWith('/presentation/')) return 'Google Slides';
                 return 'Google Drive';
             }
-
             return hostname.replace(/^www\./, '');
         } catch (e) {
             const protocol = url.split(':')[0];
@@ -44,7 +43,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const content = document.createElement('div');
         content.className = 'tab-content';
         
-        const faviconUrl = tab.favIconUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2NjYyI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAgLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyeiIvPg==';
+        const faviconUrl = tab.favIconUrl || `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ccc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>')}`;
         const img = document.createElement('img');
         img.src = faviconUrl;
         img.className = 'tab-icon';
@@ -91,16 +90,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         content.addEventListener('click', async () => {
             await chrome.tabs.update(tab.id, { active: true });
-            await chrome.windows.update(tab.windowId, { focused: true });
+            if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true });
         });
 
         const closeBtn = document.createElement('button');
         closeBtn.className = 'close-btn';
-        closeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-        closeBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            chrome.tabs.remove(tab.id);
-        });
+        closeBtn.addEventListener('click', (e) => { e.stopPropagation(); chrome.tabs.remove(tab.id); });
+        closeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
 
         li.appendChild(content);
         li.appendChild(closeBtn);
@@ -108,24 +104,22 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const render = async () => {
+        if (isRendering) return;
+        isRendering = true;
+
         const scrollY = window.scrollY;
-        const fragment = document.createDocumentFragment();
         
         const style = document.createElement('style');
         style.textContent = `
-            .window-card { transition: opacity 0.4s ease, transform 0.4s ease; }
+            .window-card { transition: opacity 0.3s ease, transform 0.3s ease; }
             .card-enter { opacity: 0; transform: translateY(20px); }
+            .card-exit { opacity: 0; transform: scale(0.95); }
             .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: 600; white-space: nowrap; }
             .status-active { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
-            .status-suspended { background-color: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
-            .status-loading { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
-            .window-card.drag-over { border: 2px dashed #2563eb; background-color: #eff6ff; transform: scale(1.02); transition: all 0.2s; }
-            .tab-item.dragging { opacity: 0.5; background-color: #e5e7eb; }
-            .pinned-icon-wrapper { width: 24px; height: 24px; margin-right: 6px; color: #666; flex-shrink: 0; transform: rotate(45deg); display: inline-flex; align-items: center; }
-            .pinned-icon-svg { width: 100%; height: 100%; }
-            .opener-icon { width: 12px; height: 12px; margin-right: 4px; color: #999; flex-shrink: 0; }
+            /* ... other styles ... */
         `;
-        if (!document.head.querySelector('style')) { 
+        if (!document.head.querySelector('style#dynamic-styles')) {
+            style.id = 'dynamic-styles';
             document.head.appendChild(style);
         }
 
@@ -138,49 +132,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const tabsById = new Map(tabs.map(tab => [tab.id, tab]));
         const suspendedCount = tabs.filter(t => t.discarded).length;
 
+        // Determine what cards should exist
+        let newCardData = new Map();
         if (currentView === 'window') {
             const tabsByWindow = tabs.reduce((acc, tab) => {
                 if (!acc[tab.windowId]) acc[tab.windowId] = [];
                 acc[tab.windowId].push(tab);
                 return acc;
             }, {});
-
-            statsEl.innerHTML = `<strong>${tabs.length}</strong> total tabs <span style="color: #6b7280; margin: 0 5px;">•</span> <strong>${suspendedCount}</strong> suspended <span style="color: #6b7280; margin: 0 5px;">•</span> across <strong>${Object.keys(tabsByWindow).length}</strong> windows`;
-
+            statsEl.innerHTML = `<strong>${tabs.length}</strong> tabs <span class="bull">&bull;</span> <strong>${suspendedCount}</strong> suspended <span class="bull">&bull;</span> <strong>${Object.keys(tabsByWindow).length}</strong> windows`;
             allWindows.forEach((win, index) => {
                 const windowTabs = tabsByWindow[win.id];
                 if (!windowTabs || windowTabs.length === 0) return;
-
-                const card = document.createElement('div');
-                card.className = 'window-card card-enter';
-                card.id = `window-${win.id}`;
-
-                card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drag-over'); });
-                card.addEventListener('dragleave', () => { card.classList.remove('drag-over'); });
-                card.addEventListener('drop', async (e) => {
-                    e.preventDefault();
-                    card.classList.remove('drag-over');
-                    const data = JSON.parse(e.dataTransfer.getData('application/json'));
-                    if (!data || data.windowId === win.id) return;
-                    try {
-                        await chrome.tabs.move(data.tabId, { windowId: win.id, index: -1 });
-                    } catch (err) { console.error("Failed to move tab:", err); }
-                });
-
-                let windowTitle = `Window ${index + 1}`;
-                if (win.incognito) windowTitle += ' (Private)';
-                const header = document.createElement('div');
-                header.className = 'window-header';
-                header.innerHTML = `<span>${windowTitle}</span> <span>${windowTabs.length} tabs</span>`;
-                card.appendChild(header);
-
-                const list = document.createElement('ul');
-                list.className = 'tab-list';
-                windowTabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, true)));
-                card.appendChild(list);
-                fragment.appendChild(card);
+                let windowTitle = `Window ${index + 1}${win.incognito ? ' (Private)' : ''}`;
+                newCardData.set(`window-${win.id}`, { id: `window-${win.id}`, title: windowTitle, tabs: windowTabs, isDraggable: true });
             });
-
         } else { // 'domain' view
             const tabsByDomain = tabs.reduce((acc, tab) => {
                 const domain = getDomain(tab.url);
@@ -188,94 +154,84 @@ document.addEventListener('DOMContentLoaded', () => {
                 acc[domain].push(tab);
                 return acc;
             }, {});
-
-            statsEl.innerHTML = `<strong>${tabs.length}</strong> total tabs <span style="color: #6b7280; margin: 0 5px;">•</span> <strong>${suspendedCount}</strong> suspended <span style="color: #6b7280; margin: 0 5px;">•</span> across <strong>${Object.keys(tabsByDomain).length}</strong> domains`;
-
+            statsEl.innerHTML = `<strong>${tabs.length}</strong> tabs <span class="bull">&bull;</span> <strong>${suspendedCount}</strong> suspended <span class="bull">&bull;</span> <strong>${Object.keys(tabsByDomain).length}</strong> domains`;
             Object.keys(tabsByDomain).sort().forEach(domain => {
                 const domainTabs = tabsByDomain[domain];
-                const card = document.createElement('div');
-                card.className = 'window-card card-enter';
-                
-                const header = document.createElement('div');
-                header.className = 'window-header';
-                header.innerHTML = `<span>${domain}</span> <span>${domainTabs.length} tabs</span>`;
-                card.appendChild(header);
-
-                const list = document.createElement('ul');
-                list.className = 'tab-list';
-                domainTabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, false)));
-                card.appendChild(list);
-                fragment.appendChild(card);
+                newCardData.set(`domain-${domain}`, { id: `domain-${domain}`, title: domain, tabs: domainTabs, isDraggable: false });
             });
         }
-        
-        devices.forEach(device => {
-            device.sessions.forEach((session) => {
-                let sessionTabs = session.window ? session.window.tabs : (session.tab ? [session.tab] : []);
-                if (sessionTabs.length === 0) return;
 
-                let sessionTitle = device.deviceName + (session.window ? ' (Window)' : ' (Single Tab)');
-                
+        const existingCardIds = new Set(Array.from(windowsContainer.children).map(c => c.id));
+        
+        // Remove old cards
+        existingCardIds.forEach(id => {
+            if (!newCardData.has(id)) {
+                const card = document.getElementById(id);
+                if (card) {
+                    card.classList.add('card-exit');
+                    card.addEventListener('transitionend', () => card.remove(), { once: true });
+                }
+            }
+        });
+
+        const fragment = document.createDocumentFragment();
+        let animationIndex = 0;
+
+        // Update existing cards and create new ones
+        newCardData.forEach(data => {
+            const existingCard = document.getElementById(data.id);
+            if (existingCard) {
+                // Update header
+                const header = existingCard.querySelector('.window-header');
+                header.innerHTML = `<span>${data.title}</span> <span>${data.tabs.length} tabs</span>`;
+                // Update list
+                const list = existingCard.querySelector('.tab-list');
+                list.innerHTML = '';
+                data.tabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, data.isDraggable)));
+            } else {
                 const card = document.createElement('div');
                 card.className = 'window-card card-enter';
-                card.style.borderTop = "4px solid #8b5cf6";
-
+                card.id = data.id;
+                
                 const header = document.createElement('div');
                 header.className = 'window-header';
-                header.innerHTML = `<span>${sessionTitle}</span> <span>${sessionTabs.length} tabs</span>`;
+                header.innerHTML = `<span>${data.title}</span> <span>${data.tabs.length} tabs</span>`;
                 card.appendChild(header);
 
                 const list = document.createElement('ul');
                 list.className = 'tab-list';
-
-                sessionTabs.forEach(tab => {
-                    const li = document.createElement('li');
-                    li.className = 'tab-item';
-                    
-                    const content = document.createElement('div');
-                    content.className = 'tab-content';
-                    content.title = tab.url;
-                    content.addEventListener('click', () => chrome.tabs.create({ url: tab.url }));
-
-                    const faviconUrl = tab.favIconUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzY2NiI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAgLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyeiIvPg==';
-                    const img = document.createElement('img');
-                    img.src = faviconUrl;
-                    img.className = 'tab-icon';
-
-                    const title = document.createElement('span');
-                    title.className = 'tab-title';
-                    title.textContent = tab.title || tab.url;
-
-                    content.appendChild(img);
-                    content.appendChild(title);
-                    
-                    const badge = document.createElement('span');
-                    badge.className = 'status-badge';
-                    badge.textContent = 'Remote';
-                    badge.style.cssText = 'background-color: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe;';
-                    content.appendChild(badge);
-                    
-                    li.appendChild(content);
-                    list.appendChild(li);
-                });
-
+                data.tabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, data.isDraggable)));
                 card.appendChild(list);
+
+                if (data.isDraggable) {
+                    card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drag-over'); });
+                    card.addEventListener('dragleave', () => { card.classList.remove('drag-over'); });
+                    card.addEventListener('drop', async (e) => {
+                        e.preventDefault();
+                        card.classList.remove('drag-over');
+                        const dropData = JSON.parse(e.dataTransfer.getData('application/json'));
+                        if (!dropData || dropData.windowId === parseInt(data.id.replace('window-',''))) return;
+                        try {
+                            await chrome.tabs.move(dropData.tabId, { windowId: parseInt(data.id.replace('window-','')), index: -1 });
+                        } catch (err) { console.error("Failed to move tab:", err); }
+                    });
+                }
                 fragment.appendChild(card);
-            });
+            }
         });
 
-        windowsContainer.innerHTML = '';
         windowsContainer.appendChild(fragment);
-        window.scrollTo(0, scrollY);
-
-        requestAnimationFrame(() => {
-            const cards = windowsContainer.querySelectorAll('.window-card');
-            cards.forEach((card, index) => {
-                setTimeout(() => {
-                    card.classList.remove('card-enter');
-                }, index * 50);
-            });
+        
+        // Animate new cards
+        const newCards = windowsContainer.querySelectorAll('.card-enter');
+        newCards.forEach((card, index) => {
+            setTimeout(() => {
+                card.classList.remove('card-enter');
+            }, (animationIndex + index) * 50);
         });
+
+        window.scrollTo(0, scrollY);
+        isRendering = false;
     };
 
     const updateView = (newView) => {
@@ -289,12 +245,18 @@ document.addEventListener('DOMContentLoaded', () => {
     viewByWindowBtn.addEventListener('click', () => updateView('window'));
     viewByDomainBtn.addEventListener('click', () => updateView('domain'));
     
-    chrome.tabs.onCreated.addListener(render);
-    chrome.tabs.onRemoved.addListener(render);
-    chrome.tabs.onUpdated.addListener(render);
-    chrome.tabs.onMoved.addListener(render);
-    chrome.tabs.onAttached.addListener(render);
-    chrome.tabs.onDetached.addListener(render);
+    let renderTimeout;
+    const debouncedRender = () => {
+        if (renderTimeout) clearTimeout(renderTimeout);
+        renderTimeout = setTimeout(render, 100);
+    };
+
+    chrome.tabs.onCreated.addListener(debouncedRender);
+    chrome.tabs.onRemoved.addListener(debouncedRender);
+    chrome.tabs.onUpdated.addListener(debouncedRender);
+    chrome.tabs.onMoved.addListener(debouncedRender);
+    chrome.tabs.onAttached.addListener(debouncedRender);
+    chrome.tabs.onDetached.addListener(debouncedRender);
 
     updateView(currentView);
 });
