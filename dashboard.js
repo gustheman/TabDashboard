@@ -13,13 +13,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const hostname = urlObj.hostname;
 
             if (hostname === 'docs.google.com') {
-                if (urlObj.pathname.startsWith('/document/')) {
-                    return 'Google Docs';
-                } else if (urlObj.pathname.startsWith('/spreadsheets/')) {
-                    return 'Google Sheets';
-                } else if (urlObj.pathname.startsWith('/presentation/')) {
-                    return 'Google Slides';
-                }
+                if (urlObj.pathname.startsWith('/document/')) return 'Google Docs';
+                if (urlObj.pathname.startsWith('/spreadsheets/')) return 'Google Sheets';
+                if (urlObj.pathname.startsWith('/presentation/')) return 'Google Slides';
                 return 'Google Drive';
             }
 
@@ -42,9 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.dataTransfer.setData('application/json', JSON.stringify({ tabId: tab.id, windowId: tab.windowId }));
                 e.dataTransfer.effectAllowed = 'move';
             });
-            li.addEventListener('dragend', () => {
-                li.classList.remove('dragging');
-            });
+            li.addEventListener('dragend', () => li.classList.remove('dragging'));
         }
         
         const content = document.createElement('div');
@@ -119,6 +113,8 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const style = document.createElement('style');
         style.textContent = `
+            .window-card { transition: opacity 0.4s ease, transform 0.4s ease; }
+            .card-enter { opacity: 0; transform: translateY(20px); }
             .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: 600; white-space: nowrap; }
             .status-active { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
             .status-suspended { background-color: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
@@ -156,7 +152,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!windowTabs || windowTabs.length === 0) return;
 
                 const card = document.createElement('div');
-                card.className = 'window-card';
+                card.className = 'window-card card-enter';
                 card.id = `window-${win.id}`;
 
                 card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drag-over'); });
@@ -198,7 +194,7 @@ document.addEventListener('DOMContentLoaded', () => {
             Object.keys(tabsByDomain).sort().forEach(domain => {
                 const domainTabs = tabsByDomain[domain];
                 const card = document.createElement('div');
-                card.className = 'window-card';
+                card.className = 'window-card card-enter';
                 
                 const header = document.createElement('div');
                 header.className = 'window-header';
@@ -213,7 +209,6 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Render Remote Devices
         devices.forEach(device => {
             device.sessions.forEach((session) => {
                 let sessionTabs = session.window ? session.window.tabs : (session.tab ? [session.tab] : []);
@@ -222,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 let sessionTitle = device.deviceName + (session.window ? ' (Window)' : ' (Single Tab)');
                 
                 const card = document.createElement('div');
-                card.className = 'window-card';
+                card.className = 'window-card card-enter';
                 card.style.borderTop = "4px solid #8b5cf6";
 
                 const header = document.createElement('div');
@@ -272,6 +267,15 @@ document.addEventListener('DOMContentLoaded', () => {
         windowsContainer.innerHTML = '';
         windowsContainer.appendChild(fragment);
         window.scrollTo(0, scrollY);
+
+        requestAnimationFrame(() => {
+            const cards = windowsContainer.querySelectorAll('.window-card');
+            cards.forEach((card, index) => {
+                setTimeout(() => {
+                    card.classList.remove('card-enter');
+                }, index * 50);
+            });
+        });
     };
 
     const updateView = (newView) => {
@@ -292,6 +296,5 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.tabs.onAttached.addListener(render);
     chrome.tabs.onDetached.addListener(render);
 
-    // Initial Setup
     updateView(currentView);
 });
