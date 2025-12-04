@@ -3,6 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsEl = document.getElementById('stats');
 
     const render = async () => {
+        // Save scroll position
+        const scrollY = window.scrollY;
+
         // 0. Clear Existing UI
         windowsContainer.innerHTML = ''; 
 
@@ -237,6 +240,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 windowsContainer.appendChild(card);
             });
         });
+
+        // Restore scroll position
+        window.scrollTo(0, scrollY);
     };
 
     // --- Real-time Listeners ---
