@@ -1,0 +1,11 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Main Tab Body -->
+    <path d="M10 118V28C10 21.3726 15.3726 16 22 16H106C112.627 16 118 21.3726 118 28V118H10Z" fill="#4285F4"/>
+    <!-- The "Tab" part on top -->
+    <path d="M20 16C20 10.4772 24.4772 6 30 6H68C73.5228 6 78 10.4772 78 16V16H20V16Z" fill="#6DA5F7"/>
+    
+    <!-- Dashboard bars -->
+    <rect x="32" y="54" width="16" height="48" rx="4" fill="white"/>
+    <rect x="56" y="40" width="16" height="62" rx="4" fill="white"/>
+    <rect x="80" y="64" width="16" height="38" rx="4" fill="white"/>
+</svg>
