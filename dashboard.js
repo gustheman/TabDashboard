@@ -10,19 +10,29 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!url) return 'Other';
         try {
             const hostname = new URL(url).hostname;
-            // Strip "www."
             return hostname.replace(/^www\./, '');
         } catch (e) {
-            // Handle special URLs like chrome://, file://, etc.
             const protocol = url.split(':')[0];
             return protocol.endsWith('s') || protocol.endsWith('p') ? 'Other' : protocol;
         }
     };
 
-    const createTabListItem = (tab, tabsById) => {
+    const createTabListItem = (tab, tabsById, isDraggable) => {
         const li = document.createElement('li');
         li.className = 'tab-item';
         li.id = `tab-${tab.id}`;
+
+        if (isDraggable) {
+            li.draggable = true;
+            li.addEventListener('dragstart', (e) => {
+                li.classList.add('dragging');
+                e.dataTransfer.setData('application/json', JSON.stringify({ tabId: tab.id, windowId: tab.windowId }));
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            li.addEventListener('dragend', () => {
+                li.classList.remove('dragging');
+            });
+        }
         
         const content = document.createElement('div');
         content.className = 'tab-content';
@@ -93,14 +103,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const scrollY = window.scrollY;
         const fragment = document.createDocumentFragment();
 
-        const [tabs, allWindows, devices] = await Promise.all([
+        const [tabs, allWindows] = await Promise.all([
             chrome.tabs.query({}),
-            chrome.windows.getAll(),
-            chrome.sessions.getDevices()
+            chrome.windows.getAll()
         ]);
         
         const tabsById = new Map(tabs.map(tab => [tab.id, tab]));
-        let suspendedCount = tabs.filter(t => t.discarded).length;
+        const suspendedCount = tabs.filter(t => t.discarded).length;
 
         if (currentView === 'window') {
             const tabsByWindow = tabs.reduce((acc, tab) => {
@@ -118,14 +127,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 const card = document.createElement('div');
                 card.className = 'window-card';
                 card.id = `window-${win.id}`;
-                li.draggable = true;
-                
-                li.addEventListener('dragstart', (e) => {
-                    li.classList.add('dragging');
-                    e.dataTransfer.setData('application/json', JSON.stringify({ tabId: tab.id, windowId: win.id }));
-                    e.dataTransfer.effectAllowed = 'move';
+
+                card.addEventListener('dragover', (e) => { e.preventDefault(); card.classList.add('drag-over'); });
+                card.addEventListener('dragleave', () => { card.classList.remove('drag-over'); });
+                card.addEventListener('drop', async (e) => {
+                    e.preventDefault();
+                    card.classList.remove('drag-over');
+                    const data = JSON.parse(e.dataTransfer.getData('application/json'));
+                    if (!data || data.windowId === win.id) return;
+                    try {
+                        await chrome.tabs.move(data.tabId, { windowId: win.id, index: -1 });
+                    } catch (err) { console.error("Failed to move tab:", err); }
                 });
-                li.addEventListener('dragend', () => li.classList.remove('dragging'));
 
                 let windowTitle = `Window ${index + 1}`;
                 if (win.incognito) windowTitle += ' (Private)';
@@ -136,7 +149,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const list = document.createElement('ul');
                 list.className = 'tab-list';
-                windowTabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById)));
+                windowTabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, true)));
                 card.appendChild(list);
                 fragment.appendChild(card);
             });
@@ -163,7 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const list = document.createElement('ul');
                 list.className = 'tab-list';
-                domainTabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById)));
+                domainTabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, false)));
                 card.appendChild(list);
                 fragment.appendChild(card);
             });
