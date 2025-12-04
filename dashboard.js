@@ -42,20 +42,11 @@ document.addEventListener('DOMContentLoaded', () => {
         img.src = faviconUrl;
         img.className = 'tab-icon';
         img.onerror = () => { img.style.display = 'none'; };
-        content.appendChild(img);
         
         if (tab.pinned) {
-            const svgNS = "http://www.w3.org/2000/svg";
-            const svg = document.createElementNS(svgNS, "svg");
-            svg.setAttribute("viewBox", "0 0 24 24");
-            svg.setAttribute("fill", "currentColor");
-            svg.classList.add("pinned-icon");
-
-            const path = document.createElementNS(svgNS, "path");
-            path.setAttribute("d", "M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z");
-            svg.appendChild(path);
-
-            content.appendChild(svg);
+            const pinIcon = document.createElement('div');
+            pinIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" class="pinned-icon"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" /></svg>`;
+            content.appendChild(pinIcon.firstElementChild);
         }
 
         let fullTitle = tab.title;
@@ -76,6 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         title.className = 'tab-title';
         title.textContent = tab.title;
 
+        content.appendChild(img);
         content.appendChild(title);
 
         const badge = document.createElement('span');
@@ -111,9 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const scrollY = window.scrollY;
         const fragment = document.createDocumentFragment();
 
-        const [tabs, allWindows] = await Promise.all([
+        const [tabs, allWindows, devices] = await Promise.all([
             chrome.tabs.query({}),
-            chrome.windows.getAll()
+            chrome.windows.getAll(),
+            chrome.sessions.getDevices()
         ]);
         
         const tabsById = new Map(tabs.map(tab => [tab.id, tab]));
@@ -190,6 +183,62 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
+        // Render Remote Devices
+        devices.forEach(device => {
+            device.sessions.forEach((session) => {
+                let sessionTabs = session.window ? session.window.tabs : (session.tab ? [session.tab] : []);
+                if (sessionTabs.length === 0) return;
+
+                let sessionTitle = device.deviceName + (session.window ? ' (Window)' : ' (Single Tab)');
+                
+                const card = document.createElement('div');
+                card.className = 'window-card';
+                card.style.borderTop = "4px solid #8b5cf6";
+
+                const header = document.createElement('div');
+                header.className = 'window-header';
+                header.innerHTML = `<span>${sessionTitle}</span> <span>${sessionTabs.length} tabs</span>`;
+                card.appendChild(header);
+
+                const list = document.createElement('ul');
+                list.className = 'tab-list';
+
+                sessionTabs.forEach(tab => {
+                    const li = document.createElement('li');
+                    li.className = 'tab-item';
+                    
+                    const content = document.createElement('div');
+                    content.className = 'tab-content';
+                    content.title = tab.url;
+                    content.addEventListener('click', () => chrome.tabs.create({ url: tab.url }));
+
+                    const faviconUrl = tab.favIconUrl || 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iIzY2NiI+PHBhdGggZD0iTTEyIDJDNi40OCAyIDIgNi40OCAyIDEyczQuNDggMTAgMTAgMTAgMTAgLTQuNDggMTAtMTBTMTcuNTIgMiAxMiAyeiIvPg==';
+                    const img = document.createElement('img');
+                    img.src = faviconUrl;
+                    img.className = 'tab-icon';
+
+                    const title = document.createElement('span');
+                    title.className = 'tab-title';
+                    title.textContent = tab.title || tab.url;
+
+                    content.appendChild(img);
+                    content.appendChild(title);
+                    
+                    const badge = document.createElement('span');
+                    badge.className = 'status-badge';
+                    badge.textContent = 'Remote';
+                    badge.style.cssText = 'background-color: #f3e8ff; color: #7e22ce; border: 1px solid #d8b4fe;';
+                    content.appendChild(badge);
+                    
+                    li.appendChild(content);
+                    list.appendChild(li);
+                });
+
+                card.appendChild(list);
+                fragment.appendChild(card);
+            });
+        });
+
         windowsContainer.innerHTML = '';
         windowsContainer.appendChild(fragment);
         window.scrollTo(0, scrollY);
