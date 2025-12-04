@@ -140,3 +140,35 @@ header p {
     background-color: #d1d5db;
     border-radius: 20px;
 }
+
+.header-controls {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+.view-switcher {
+    display: flex;
+    background-color: #e5e7eb;
+    border-radius: 8px;
+    padding: 4px;
+}
+
+.view-switcher button {
+    background: none;
+    border: none;
+    padding: 6px 12px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.view-switcher button.active {
+    background-color: var(--card-bg);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}

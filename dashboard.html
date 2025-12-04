@@ -10,7 +10,13 @@
     <div class="container">
         <header>
             <h1>Your Open Tabs</h1>
-            <p id="stats">Loading...</p>
+            <div class="header-controls">
+                <div id="view-switcher" class="view-switcher">
+                    <button id="view-by-window" class="active">By Window</button>
+                    <button id="view-by-domain">By Domain</button>
+                </div>
+                <p id="stats">Loading...</p>
+            </div>
         </header>
         
         <div id="windows-container" class="windows-grid">
