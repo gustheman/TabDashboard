@@ -44,9 +44,10 @@ document.addEventListener('DOMContentLoaded', () => {
         img.onerror = () => { img.style.display = 'none'; };
         
         if (tab.pinned) {
-            const pinIcon = document.createElement('div');
-            pinIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" class="pinned-icon"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" /></svg>`;
-            content.appendChild(pinIcon.firstElementChild);
+            const pinIconWrapper = document.createElement('span');
+            pinIconWrapper.className = 'pinned-icon-wrapper';
+            pinIconWrapper.innerHTML = `<svg class="pinned-icon-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" /></svg>`;
+            content.appendChild(pinIconWrapper);
         }
 
         let fullTitle = tab.title;
@@ -102,6 +103,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const render = async () => {
         const scrollY = window.scrollY;
         const fragment = document.createDocumentFragment();
+        
+        const style = document.createElement('style');
+        style.textContent = `
+            .status-badge { font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-left: 8px; font-weight: 600; white-space: nowrap; }
+            .status-active { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+            .status-suspended { background-color: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
+            .status-loading { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+            .window-card.drag-over { border: 2px dashed #2563eb; background-color: #eff6ff; transform: scale(1.02); transition: all 0.2s; }
+            .tab-item.dragging { opacity: 0.5; background-color: #e5e7eb; }
+            .pinned-icon-wrapper { width: 24px; height: 24px; margin-right: 6px; color: #666; flex-shrink: 0; transform: rotate(45deg); display: inline-flex; align-items: center; }
+            .pinned-icon-svg { width: 100%; height: 100%; }
+            .opener-icon { width: 12px; height: 12px; margin-right: 4px; color: #999; flex-shrink: 0; }
+        `;
+        if (!document.head.querySelector('style')) { 
+            document.head.appendChild(style);
+        }
 
         const [tabs, allWindows, devices] = await Promise.all([
             chrome.tabs.query({}),
