@@ -3,11 +3,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const statsEl = document.getElementById('stats');
 
     const render = async () => {
-        // Save scroll position
+        // Save scroll position and create a document fragment
         const scrollY = window.scrollY;
-
-        // 0. Clear Existing UI
-        windowsContainer.innerHTML = ''; 
+        const fragment = document.createDocumentFragment();
 
         // 1. Inject CSS (only needs to be done once, but harmless to keep here)
         const style = document.createElement('style');
@@ -74,7 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
             `;
         };
 
-        // 4. Render Windows
+        // 4. Render Windows into the fragment
         allWindows.forEach((win, index) => {
             const windowTabs = tabsByWindow[win.id];
             
@@ -93,7 +91,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (!data || data.windowId === win.id) return;
                 try {
                     await chrome.tabs.move(data.tabId, { windowId: win.id, index: -1 });
-                    // No need for manual DOM move, render() will handle it
                 } catch (err) { console.error("Failed to move tab:", err); }
             });
 
@@ -168,9 +165,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     e.stopPropagation();
                     try {
                         await chrome.tabs.remove(tab.id);
-                        // No need for manual DOM removal, render() will be called by listener
                     } catch (err) { 
-                        // If tab is already gone, the listener might not fire, so remove manually as a fallback.
                         li.remove();
                         updateWindowUI(card);
                     }
@@ -182,10 +177,10 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             card.appendChild(list);
-            windowsContainer.appendChild(card);
+            fragment.appendChild(card);
         });
 
-        // 5. Render Remote Devices
+        // 5. Render Remote Devices into the fragment
         devices.forEach(device => {
             device.sessions.forEach((session) => {
                 let sessionTabs = session.window ? session.window.tabs : (session.tab ? [session.tab] : []);
@@ -237,11 +232,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 });
 
                 card.appendChild(list);
-                windowsContainer.appendChild(card);
+                fragment.appendChild(card);
             });
         });
 
-        // Restore scroll position
+        // 6. Replace content and restore scroll
+        windowsContainer.innerHTML = '';
+        windowsContainer.appendChild(fragment);
         window.scrollTo(0, scrollY);
     };
 
