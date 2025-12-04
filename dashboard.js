@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
             .window-card.drag-over { border: 2px dashed #2563eb; background-color: #eff6ff; transform: scale(1.02); transition: all 0.2s; }
             .tab-item.dragging { opacity: 0.5; background-color: #e5e7eb; }
             .pinned-icon { width: 14px; height: 14px; margin-right: 6px; color: #666; flex-shrink: 0; transform: rotate(45deg); }
+            .opener-icon { width: 12px; height: 12px; margin-right: 4px; color: #999; flex-shrink: 0; }
         `;
         if (!document.head.querySelector('style')) { // Inject only if not already present
             document.head.appendChild(style);
@@ -32,6 +33,9 @@ document.addEventListener('DOMContentLoaded', () => {
         // 3. Group tabs and Calculate Stats
         const tabsByWindow = {};
         let suspendedCount = 0;
+
+        // Create a quick lookup map for tabs by ID
+        const tabsById = new Map(tabs.map(tab => [tab.id, tab]));
 
         tabs.forEach(tab => {
             if (!tabsByWindow[tab.windowId]) {
@@ -134,6 +138,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     pinIcon.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor" class="pinned-icon"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" /></svg>`;
                     content.appendChild(pinIcon.firstElementChild);
                 }
+
+                // --- Opener Tab Indicator ---
+                if (tab.openerTabId) {
+                    const openerTab = tabsById.get(tab.openerTabId);
+                    if (openerTab) {
+                        const openerIcon = document.createElement('div');
+                        openerIcon.title = `Opened from: ${openerTab.title}`;
+                        openerIcon.innerHTML = `<svg class="opener-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M19,15l-6,6l-1.42-1.42L15.17,16H4V4h2v10h9.17l-3.59-3.58L13,9l6,6z"/></svg>`;
+                        content.appendChild(openerIcon.firstElementChild);
+                    }
+                }
+                // --------------------------
 
                 const title = document.createElement('span');
                 title.className = 'tab-title';
