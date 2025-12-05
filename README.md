@@ -41,8 +41,12 @@ To install and use this extension locally, follow these steps:
     -   In the file selection dialog, navigate to the directory where you cloned or extracted the project files (the `TabDashboard` folder).
     -   Select the entire folder and click **"Select Folder"**.
 
-5.  **Done!**
-    -   The TabDashboard extension should now appear in your list of installed extensions and be ready to use.
+5.  **Pin to toolbar:**
+    -   Click the **Details** button in the **Tab Dashboard** Extensions card.
+    -   Click the **Pin to toolbar** toggle.
+
+6.  **Done!**
+    -   The TabDashboard extension should now appear in your list of installed extensions, have an icon in your Chrome toolbar and be ready to use.
 
 ## Usage
 
