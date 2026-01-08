@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    const createTabListItem = (tab, tabsById, isDraggable) => {
+    const createTabListItem = (tab, tabsById, isDraggable, storageData) => {
         const li = document.createElement('li');
         li.className = 'tab-item';
         if (tab.isRemote) {
@@ -61,6 +61,22 @@ document.addEventListener('DOMContentLoaded', () => {
             pinIconWrapper.className = 'pinned-icon-wrapper';
             pinIconWrapper.innerHTML = `<svg class="pinned-icon-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M16,12V4H17V2H7V4H8V12L6,14V16H11.2V22H12.8V16H18V14L16,12Z" /></svg>`;
             content.appendChild(pinIconWrapper);
+        }
+
+        // Check for notes
+        if (storageData) {
+            const noteKey = `note_${tab.url}`;
+            const noteContent = storageData[noteKey];
+            if (noteContent) {
+                const noteIconWrapper = document.createElement('span');
+                noteIconWrapper.className = 'note-icon-wrapper';
+                noteIconWrapper.title = noteContent; // Tooltip with note content
+                noteIconWrapper.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="#f59e0b" stroke="#d97706" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><line x1="10" y1="9" x2="8" y2="9"></line></svg>`;
+                noteIconWrapper.style.marginRight = '8px';
+                noteIconWrapper.style.display = 'flex';
+                noteIconWrapper.style.alignItems = 'center';
+                content.appendChild(noteIconWrapper);
+            }
         }
 
         let fullTitle = tab.title;
@@ -179,10 +195,11 @@ document.addEventListener('DOMContentLoaded', () => {
             document.head.appendChild(style);
         }
 
-        const [tabs, allWindows, devices] = await Promise.all([
+        const [tabs, allWindows, devices, storageData] = await Promise.all([
             chrome.tabs.query({}),
             chrome.windows.getAll(),
-            chrome.sessions.getDevices()
+            chrome.sessions.getDevices(),
+            chrome.storage.local.get(null)
         ]);
         
         const tabsById = new Map(tabs.map(tab => [tab.id, tab]));
@@ -313,7 +330,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Update list
                 const list = existingCard.querySelector('.tab-list');
                 list.innerHTML = '';
-                data.tabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, data.isDraggable)));
+                data.tabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, data.isDraggable, storageData)));
             } else {
                 const card = document.createElement('div');
                 card.className = 'window-card card-enter';
@@ -329,7 +346,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                 const list = document.createElement('ul');
                 list.className = 'tab-list';
-                data.tabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, data.isDraggable)));
+                data.tabs.forEach(tab => list.appendChild(createTabListItem(tab, tabsById, data.isDraggable, storageData)));
                 card.appendChild(list);
 
                 if (data.isDraggable) {

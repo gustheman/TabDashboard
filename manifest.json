@@ -5,8 +5,21 @@
   "description": "View, manage, and organize all open tabs across all windows.",
   "permissions": [
     "tabs",
-    "sessions"
+    "sessions",
+    "storage",
+    "scripting",
+    "activeTab"
   ],
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["note-injector.js"]
+    }
+  ],
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": false
+  },
   "action": {
     "default_title": "Open Tab Dashboard"
   },
