@@ -28,9 +28,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const createTabListItem = (tab, tabsById, isDraggable) => {
         const li = document.createElement('li');
         li.className = 'tab-item';
-        li.id = `tab-${tab.id}`;
+        if (tab.isRemote) {
+            li.classList.add('remote-item');
+        }
+        // Use a unique ID fallback if tab.id is missing (remote tabs)
+        li.id = `tab-${tab.id || Math.random().toString(36).substr(2, 9)}`;
 
-        if (isDraggable) {
+        if (isDraggable && !tab.isRemote) {
             li.draggable = true;
             li.addEventListener('dragstart', (e) => {
                 li.classList.add('dragging');
@@ -42,6 +46,9 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const content = document.createElement('div');
         content.className = 'tab-content';
+        if (tab.isRemote) {
+            content.classList.add('remote-tab');
+        }
         
         const faviconUrl = tab.favIconUrl || `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ccc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>')}`;
         const img = document.createElement('img');
@@ -57,17 +64,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         let fullTitle = tab.title;
-        if (tab.openerTabId) {
-            const openerTab = tabsById.get(tab.openerTabId);
-            if (openerTab) {
-                const openerIconWrapper = document.createElement('span');
-                openerIconWrapper.className = 'opener-icon';
-                openerIconWrapper.title = `Opened from: ${openerTab.title}`;
-                openerIconWrapper.innerHTML = `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M19,15l-6,6l-1.42-1.42L15.17,16H4V4h2v10h9.17l-3.59-3.58L13,9l6,6z"/></svg>`;
-                content.appendChild(openerIconWrapper);
-                fullTitle += `\nOpened from: ${openerTab.title}`;
-            }
+        if (tab.isRemote && tab.deviceName) {
+            fullTitle += `\nOn device: ${tab.deviceName}`;
         }
+        
         content.title = fullTitle;
 
         const title = document.createElement('span');
@@ -77,9 +77,35 @@ document.addEventListener('DOMContentLoaded', () => {
         content.appendChild(img);
         content.appendChild(title);
 
+        if (tab.openerTabId && !tab.isRemote) {
+            const openerTab = tabsById.get(tab.openerTabId);
+            if (openerTab) {
+                const openerBadge = document.createElement('span');
+                openerBadge.className = 'opener-badge';
+                openerBadge.title = `Go to parent: ${openerTab.title}`;
+                openerBadge.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 15l-6 6m0 0l-6-6m6 6V9a6 6 0 0 1 12 0v3"/></svg> From: ${openerTab.title.substring(0, 15)}${openerTab.title.length > 15 ? '...' : ''}`;
+                
+                openerBadge.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    try {
+                        await chrome.tabs.update(openerTab.id, { active: true });
+                        if (openerTab.windowId) await chrome.windows.update(openerTab.windowId, { focused: true });
+                    } catch (err) {
+                        console.error("Parent tab might be closed", err);
+                    }
+                });
+                content.appendChild(openerBadge);
+                fullTitle += `\nOpened from: ${openerTab.title}`;
+                content.title = fullTitle;
+            }
+        }
+
         const badge = document.createElement('span');
         badge.className = 'status-badge';
-        if (tab.discarded) {
+        if (tab.isRemote) {
+             badge.textContent = tab.deviceName || 'Remote';
+             badge.classList.add('status-remote');
+        } else if (tab.discarded) {
             badge.textContent = 'Suspended'; badge.classList.add('status-suspended');
         } else if (tab.status === 'loading') {
             badge.textContent = 'Loading'; badge.classList.add('status-loading');
@@ -89,15 +115,32 @@ document.addEventListener('DOMContentLoaded', () => {
         content.appendChild(badge);
 
         content.addEventListener('click', async () => {
-            await chrome.tabs.update(tab.id, { active: true });
-            if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true });
+            if (tab.isRemote) {
+                await chrome.tabs.create({ url: tab.url, active: true });
+            } else {
+                await chrome.tabs.update(tab.id, { active: true });
+                if (tab.windowId) await chrome.windows.update(tab.windowId, { focused: true });
+            }
         });
 
         const closeBtn = document.createElement('button');
         closeBtn.className = 'close-btn';
-        closeBtn.addEventListener('click', (e) => { e.stopPropagation(); chrome.tabs.remove(tab.id); });
-        closeBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
-
+        closeBtn.title = 'Close tab';
+        closeBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (tab.isRemote) {
+                li.remove();
+            } else {
+                chrome.tabs.remove(tab.id);
+            }
+        });
+        // Using a more robust SVG for the "X"
+        closeBtn.innerHTML = `
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>`;
+        
         li.appendChild(content);
         li.appendChild(closeBtn);
         return li;
@@ -118,11 +161,18 @@ document.addEventListener('DOMContentLoaded', () => {
             .status-active { background-color: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
             .status-suspended { background-color: #f3f4f6; color: #6b7280; border: 1px solid #e5e7eb; }
             .status-loading { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+            .status-remote { background-color: #eef2ff; color: #4338ca; border: 1px solid #c7d2fe; }
             .window-card.drag-over { border: 2px dashed #2563eb; background-color: #eff6ff; transform: scale(1.02); transition: all 0.2s; }
             .tab-item.dragging { opacity: 0.5; background-color: #e5e7eb; }
             .pinned-icon-wrapper { width: 24px; height: 24px; margin-right: 6px; color: #666; flex-shrink: 0; transform: rotate(45deg); display: inline-flex; align-items: center; }
             .pinned-icon-svg { width: 100%; height: 100%; }
             .opener-icon { width: 12px; height: 12px; margin-right: 4px; color: #999; flex-shrink: 0; }
+            
+            /* Remote specific styles */
+            .remote-card { border: 1px solid #c7d2fe; background-color: #f8faff; }
+            .remote-card .window-header { background-color: #eef2ff; color: #3730a3; border-bottom: 1px solid #c7d2fe; }
+            .tab-item.remote-item { border-left: 3px solid #818cf8; }
+            .tab-item.remote-item:hover { background-color: #f0f4ff; }
         `;
         if (!document.head.querySelector('style#dynamic-styles')) {
             style.id = 'dynamic-styles';
@@ -153,6 +203,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 let windowTitle = `Window ${index + 1}${win.incognito ? ' (Private)' : ''}`;
                 newCardData.set(`window-${win.id}`, { id: `window-${win.id}`, title: windowTitle, tabs: windowTabs, isDraggable: true });
             });
+
+            // Process remote devices for window view
+            if (devices) {
+                devices.forEach(device => {
+                    if (!device.sessions) return;
+                    device.sessions.forEach((session, sessionIndex) => {
+                        let remoteTabs = [];
+                        let title = `${device.deviceName}`;
+                        
+                        if (session.window && session.window.tabs) {
+                            remoteTabs = session.window.tabs;
+                            title += ` - Window ${sessionIndex + 1}`;
+                        } else if (session.tab) {
+                            remoteTabs = [session.tab];
+                            title += ` - Tab`;
+                        }
+
+                        if (remoteTabs.length > 0) {
+                            const mappedTabs = remoteTabs.map(t => ({
+                                ...t,
+                                isRemote: true,
+                                deviceName: device.deviceName,
+                                id: t.id || null, 
+                                title: t.title || 'Untitled',
+                                url: t.url,
+                                favIconUrl: t.favIconUrl
+                            }));
+                            // Use a safe ID for the card
+                            const safeDeviceName = device.deviceName.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+                            const cardId = `device-${safeDeviceName}-${sessionIndex}`;
+                            
+                            newCardData.set(cardId, {
+                                id: cardId,
+                                title: title,
+                                tabs: mappedTabs,
+                                isDraggable: false,
+                                isRemote: true
+                            });
+                        }
+                    });
+                });
+            }
+
         } else { // 'domain' view
             const tabsByDomain = tabs.reduce((acc, tab) => {
                 const domain = getDomain(tab.url);
@@ -160,6 +253,33 @@ document.addEventListener('DOMContentLoaded', () => {
                 acc[domain].push(tab);
                 return acc;
             }, {});
+            
+            // Process remote devices for domain view
+            if (devices) {
+                devices.forEach(device => {
+                    if (!device.sessions) return;
+                    device.sessions.forEach(session => {
+                         let remoteTabs = [];
+                         if (session.window && session.window.tabs) remoteTabs = session.window.tabs;
+                         else if (session.tab) remoteTabs = [session.tab];
+                         
+                         remoteTabs.forEach(t => {
+                             const domain = getDomain(t.url);
+                             if (!tabsByDomain[domain]) tabsByDomain[domain] = [];
+                             tabsByDomain[domain].push({
+                                 ...t,
+                                 isRemote: true,
+                                 deviceName: device.deviceName,
+                                 id: t.id || null, 
+                                 title: t.title || 'Untitled',
+                                 url: t.url,
+                                 favIconUrl: t.favIconUrl
+                             });
+                         });
+                    });
+                });
+            }
+
             statsEl.innerHTML = `<strong>${tabs.length}</strong> tabs <span class="bull">&bull;</span> <strong>${suspendedCount}</strong> suspended <span class="bull">&bull;</span> <strong>${Object.keys(tabsByDomain).length}</strong> domains`;
             Object.keys(tabsByDomain).sort().forEach(domain => {
                 const domainTabs = tabsByDomain[domain];
@@ -197,6 +317,9 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 const card = document.createElement('div');
                 card.className = 'window-card card-enter';
+                if (data.isRemote) {
+                    card.classList.add('remote-card');
+                }
                 card.id = data.id;
                 
                 const header = document.createElement('div');
