@@ -2,56 +2,51 @@
 
 ## Project Overview
 
-TabDashboard is a Chrome extension that provides a centralized interface to view, manage, and organize all of your open tabs across all browser windows. It's designed to help you regain control over your tab clutter and improve your browsing productivity.
+TabDashboard is a powerful Chrome extension that provides a centralized interface to view, manage, and organize all of your open tabs across all browser windows and devices. It goes beyond simple tab management by adding a persistent layer of notes and context to your browsing experience.
 
-## Features
+## Key Features
 
-- **Unified View:** See all your open tabs, grouped by window, in a single, clean dashboard.
-- **Cross-Device Sync:** View tabs from your other devices (e.g., laptop, phone) that are synced to your Google Account.
-- **Drag & Drop:** Easily organize your tabs by dragging and dropping them between windows.
-- **Tab Management:** Close tabs individually directly from the dashboard.
-- **Pinned Tab Indicator:** Quickly identify your pinned tabs with a distinct visual marker.
-- **At-a-Glance Stats:** Get a quick count of your total open windows and tabs.
+### 🚀 Unified Dashboard
+- **Window View:** See all your open tabs grouped by window. Drag and drop tabs between windows to reorganize effortlessly.
+- **Domain View:** Automatically group tabs by their domain (e.g., all Google Docs together, all YouTube videos together) to focus on specific tasks.
+- **Cross-Device Sync:** View open tabs from your other synced devices (phones, laptops) directly in the dashboard.
+- **Tab Provenance:** Instantly see where a tab came from. If a tab was opened from another page, a clickable "From: [Page Title]" badge appears to take you back to the source.
+
+### 📝 Per-Tab Notes
+- **Instant Notes:** Add sticky notes to any webpage. Your notes persist even if you close the tab and come back later.
+- **Keyboard Shortcuts:**
+    - **Toggle Note:** Press `Cmd+Shift+X` (Mac) or `Ctrl+Shift+X` (Windows/Linux) to open the note for the current tab instantly.
+    - **Open Dashboard:** Press `Cmd+J` (Mac) or `Ctrl+Shift+D` (Windows/Linux) to launch the TabDashboard.
+    - *Shortcuts are fully configurable in `chrome://extensions/shortcuts`.*
+- **Notes View:** A dedicated view in the dashboard that shows only tabs with attached notes, turning your browser into a visual to-do list.
+- **Universal Compatibility:** Works perfectly on complex web apps like Google Docs, Cloud Console, and local files.
 
 ## Installation
 
-To install and use this extension locally, follow these steps:
-
-**Prerequisites:**
-- Google Chrome browser
-
-**Step-by-Step Instructions:**
+To install and use this extension locally:
 
 1.  **Get the Code:**
-    -   Clone the repository to your local machine:
+    -   Clone the repository:
         ```bash
         git clone https://github.com/gustheman/TabDashboard.git
         ```
-    -   Alternatively, you can download the source code as a ZIP file and extract it.
-
 2.  **Open Chrome Extensions:**
-    -   Open your Google Chrome browser.
     -   Navigate to `chrome://extensions`.
-
 3.  **Enable Developer Mode:**
-    -   In the top-right corner of the Extensions page, toggle the switch for **"Developer mode"** to the "on" position.
-
+    -   Toggle **"Developer mode"** in the top-right corner.
 4.  **Load the Extension:**
-    -   Click the **"Load unpacked"** button that appears.
-    -   In the file selection dialog, navigate to the directory where you cloned or extracted the project files (the `TabDashboard` folder).
-    -   Select the entire folder and click **"Select Folder"**.
-
-5.  **Done!**
-    -   The TabDashboard extension should now appear in your list of installed extensions and be ready to use.
+    -   Click **"Load unpacked"**.
+    -   Select the project folder.
 
 ## Usage
 
-1.  Click on the TabDashboard extension icon in your Chrome toolbar.
-2.  A new tab will open, displaying the dashboard with all your currently open tabs.
+1.  **Open Dashboard:** Click the extension icon in the toolbar or use the shortcut (`Cmd+J` / `Ctrl+Shift+D`).
+2.  **Add a Note:** On any webpage, press `Cmd+Shift+X` (Mac) or `Ctrl+Shift+X` (Win) to open the note popup.
+3.  **Manage Tabs:** Use the dashboard to close tabs, move them between windows, or review your notes.
 
 ## Contributing
 
-Contributions are welcome! If you have ideas for new features, bug fixes, or improvements, please feel free to open an issue or submit a pull request.
+Contributions are welcome!
 
 1.  Fork the repository.
 2.  Create a new branch (`git checkout -b feature/YourFeature`).
