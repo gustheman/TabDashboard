@@ -239,7 +239,8 @@ document.addEventListener('DOMContentLoaded', () => {
             actionBtn.onclick = async () => {
                 await chrome.tabs.create({ url: note.url });
             };
-            header.style.cursor = 'default';
+            header.onclick = actionBtn.onclick;
+            header.style.cursor = 'pointer';
         }
         
         footer.appendChild(deleteBtn);
