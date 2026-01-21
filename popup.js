@@ -26,8 +26,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // 3. Load Note
     chrome.storage.local.get([noteKey], (result) => {
-        if (result[noteKey]) {
-            textarea.value = result[noteKey];
+        const stored = result[noteKey];
+        if (stored) {
+            // Handle both string (legacy) and object formats
+            textarea.value = typeof stored === 'object' ? stored.content : stored;
         }
     });
 
@@ -39,7 +41,13 @@ document.addEventListener('DOMContentLoaded', async () => {
         saveTimeout = setTimeout(() => {
             const note = textarea.value;
             const data = {};
-            data[noteKey] = note;
+            // Save as object with metadata for better Dashboard display
+            data[noteKey] = {
+                content: note,
+                title: tab.title,
+                favIconUrl: tab.favIconUrl,
+                updatedAt: Date.now()
+            };
             chrome.storage.local.set(data, () => {
                 statusEl.style.opacity = '1';
                 setTimeout(() => { statusEl.style.opacity = '0'; }, 2000);

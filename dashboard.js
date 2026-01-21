@@ -8,8 +8,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let currentView = localStorage.getItem('tabDashboard-view') || 'window';
     let isRendering = false;
     
-    // ... existing code ...
-
     const updateView = (newView) => {
         currentView = newView;
         localStorage.setItem('tabDashboard-view', newView);
@@ -83,7 +81,14 @@ document.addEventListener('DOMContentLoaded', () => {
         // Check for notes
         if (storageData) {
             const noteKey = `note_${tab.url}`;
-            const noteContent = storageData[noteKey];
+            const noteData = storageData[noteKey];
+            let noteContent = null;
+            if (typeof noteData === 'string') {
+                noteContent = noteData;
+            } else if (noteData && typeof noteData === 'object') {
+                noteContent = noteData.content;
+            }
+
             if (noteContent) {
                 const noteIconWrapper = document.createElement('span');
                 noteIconWrapper.className = 'note-icon-wrapper';
@@ -179,12 +184,254 @@ document.addEventListener('DOMContentLoaded', () => {
         return li;
     };
 
+    const createNoteCardElement = (note) => {
+        const card = document.createElement('div');
+        card.className = 'note-card card-enter';
+        card.id = note.id;
+        
+        const faviconUrl = note.favIconUrl || `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ccc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>')}`;
+        
+        const header = document.createElement('div');
+        header.className = 'note-card-header';
+        
+        const img = document.createElement('img');
+        img.src = faviconUrl;
+        img.width = 16;
+        img.height = 16;
+        img.style.flexShrink = '0';
+        img.onerror = () => { img.style.display = 'none'; };
+        
+        const title = document.createElement('span');
+        title.className = 'note-card-title';
+        title.textContent = note.title;
+        
+        header.appendChild(img);
+        header.appendChild(title);
+        
+        const content = document.createElement('textarea');
+        content.className = 'note-card-content';
+        content.value = note.content;
+        content.placeholder = "Add your notes here...";
+        
+        const footer = document.createElement('div');
+        footer.className = 'note-card-footer';
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'note-action-btn note-delete-btn';
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.style.color = '#ef4444';
+        deleteBtn.style.borderColor = '#fca5a5';
+        deleteBtn.style.marginRight = 'auto';
+
+        const actionBtn = document.createElement('button');
+        actionBtn.className = 'note-action-btn';
+        
+        if (note.isOpen) {
+            actionBtn.textContent = 'Go to Tab';
+            actionBtn.onclick = async () => {
+                await chrome.tabs.update(note.tabId, { active: true });
+                if (note.windowId) await chrome.windows.update(note.windowId, { focused: true });
+            };
+            header.onclick = actionBtn.onclick;
+            header.style.cursor = 'pointer';
+        } else {
+            actionBtn.textContent = 'Reopen Tab';
+            actionBtn.onclick = async () => {
+                await chrome.tabs.create({ url: note.url });
+            };
+            header.style.cursor = 'default';
+        }
+        
+        footer.appendChild(deleteBtn);
+        footer.appendChild(actionBtn);
+        
+        card.appendChild(header);
+        card.appendChild(content);
+        card.appendChild(footer);
+
+        // Delete Logic
+        deleteBtn.onclick = async (e) => {
+            e.stopPropagation();
+            if (confirm('Are you sure you want to delete this note?')) {
+                const noteKey = `note_${note.url}`;
+                await chrome.storage.local.remove(noteKey);
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.9)';
+                setTimeout(() => card.remove(), 300);
+            }
+        };
+
+        // Auto-save Logic with Metadata
+        let saveTimeout;
+        content.addEventListener('input', () => {
+            clearTimeout(saveTimeout);
+            saveTimeout = setTimeout(() => {
+                const noteKey = `note_${note.url}`;
+                const newContent = content.value;
+                const storageUpdate = {};
+                
+                // Save as object with metadata
+                storageUpdate[noteKey] = {
+                    content: newContent,
+                    title: note.title,
+                    favIconUrl: note.favIconUrl,
+                    updatedAt: Date.now()
+                };
+                chrome.storage.local.set(storageUpdate);
+            }, 500);
+        });
+
+        return card;
+    };
+
+    const renderNotesView = (tabs, storageData, container, statsEl) => {
+        container.className = ''; // Remove grid classes
+        
+        // 1. Ensure Layout
+        let openSection = container.querySelector('#open-notes-section');
+        if (!openSection) {
+            container.innerHTML = `
+                <div id="open-notes-section">
+                    <h2 class="section-title" style="margin-bottom: 1rem; color: #4b5563; font-size: 1.2rem; font-weight: 600; padding-left: 4px;">Open Tabs</h2>
+                    <div id="open-notes-grid" class="note-view-grid"></div>
+                </div>
+                <div id="closed-notes-section" style="margin-top: 3rem;">
+                    <h2 class="section-title" style="margin-bottom: 1rem; color: #4b5563; font-size: 1.2rem; font-weight: 600; padding-left: 4px;">Closed Tabs</h2>
+                    <div id="closed-notes-grid" class="note-view-grid"></div>
+                </div>
+            `;
+            openSection = container.querySelector('#open-notes-section');
+        }
+        
+        const openGrid = container.querySelector('#open-notes-grid');
+        const closedGrid = container.querySelector('#closed-notes-grid');
+
+        // 2. Process Data
+        const openNotes = [];
+        const closedNotes = [];
+        let noteCount = 0;
+
+        if (storageData) {
+            const tabsByUrl = new Map();
+            tabs.forEach(t => tabsByUrl.set(t.url, t));
+
+            Object.keys(storageData).forEach(key => {
+                if (!key.startsWith('note_')) return;
+                
+                const url = key.substring(5); // remove 'note_'
+                const data = storageData[key];
+                
+                // Parse data (string or object)
+                let content = '';
+                let title = null;
+                let favIconUrl = null;
+                
+                if (typeof data === 'string') {
+                    content = data;
+                } else if (data && typeof data === 'object') {
+                    content = data.content || '';
+                    title = data.title;
+                    favIconUrl = data.favIconUrl;
+                }
+                
+                if (!content || content.trim().length === 0) return;
+                
+                noteCount++;
+                
+                const tab = tabsByUrl.get(url);
+                const noteObj = {
+                    id: `note-${url.replace(/[^a-z0-9]/gi, '-')}`, // Safe ID
+                    url: url,
+                    content: content,
+                    title: tab ? tab.title : (title || url),
+                    favIconUrl: tab ? tab.favIconUrl : (favIconUrl || null),
+                    tabId: tab ? tab.id : null,
+                    windowId: tab ? tab.windowId : null,
+                    isOpen: !!tab
+                };
+
+                if (tab) {
+                    openNotes.push(noteObj);
+                } else {
+                    closedNotes.push(noteObj);
+                }
+            });
+        }
+        
+        statsEl.innerHTML = `<strong>${noteCount}</strong> notes found <span class="bull">&bull;</span> <strong>${openNotes.length}</strong> open <span class="bull">&bull;</span> <strong>${closedNotes.length}</strong> closed`;
+
+        if (noteCount === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 1rem; color: #9ca3af;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="12" y1="18" x2="12" y2="18"></line>
+                        <path d="M9.16667 12C9.69864 12.3524 10.3207 12.5556 10.9667 12.5556C12.4394 12.5556 13.6333 11.3616 13.6333 9.88889C13.6333 8.41619 12.4394 7.22222 10.9667 7.22222C10.3207 7.22222 9.69864 7.42533 9.16667 7.77778"></path>
+                    </svg>
+                    <p style="font-size: 1.1rem; margin-bottom: 0.5rem;">No notes yet</p>
+                    <p style="font-size: 0.9rem;">Add notes to your tabs to see them here.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // 3. Render Helper
+        const updateGrid = (grid, notes) => {
+            const existingIds = new Set(Array.from(grid.children).map(c => c.id));
+            const newIds = new Set(notes.map(n => n.id));
+            
+            // Remove old
+            existingIds.forEach(id => {
+                if (!newIds.has(id)) {
+                    const card = document.getElementById(id);
+                    if (card) {
+                        card.classList.add('card-exit');
+                        card.addEventListener('transitionend', () => card.remove(), { once: true });
+                    }
+                }
+            });
+            
+            // Add/Update
+            notes.forEach(note => {
+                let card = document.getElementById(note.id);
+                if (card) {
+                    // Update content if changed (avoid losing focus)
+                    const contentEl = card.querySelector('.note-card-content');
+                    if (contentEl && contentEl.value !== note.content && document.activeElement !== contentEl) {
+                        contentEl.value = note.content;
+                    }
+                } else {
+                    card = createNoteCardElement(note);
+                    grid.appendChild(card);
+                }
+            });
+        };
+
+        updateGrid(openGrid, openNotes);
+        updateGrid(closedGrid, closedNotes);
+
+        // Animate entry
+        const newCards = container.querySelectorAll('.card-enter');
+        newCards.forEach((card, index) => {
+            setTimeout(() => {
+                card.classList.remove('card-enter');
+            }, index * 50);
+        });
+    };
+
     const render = async () => {
-        if (isRendering) return;
+        console.log('TabDashboard: render() called.');
+        if (isRendering) {
+            console.log('TabDashboard: render() skipped, already rendering.');
+            return;
+        }
         isRendering = true;
+        console.log('TabDashboard: Starting render cycle.');
 
         try {
             const scrollY = window.scrollY;
+            console.log('TabDashboard: Current scrollY:', scrollY);
             
             const style = document.createElement('style');
             style.textContent = `
@@ -232,6 +479,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 chrome.sessions.getDevices().catch(() => []), // Return empty array on error
                 chrome.storage.local.get(null).catch(() => ({})) // Return empty object on error
             ]);
+
+            // Dispatch to Notes Renderer if needed
+            if (currentView === 'notes') {
+                renderNotesView(tabs, storageData, windowsContainer, statsEl);
+                isRendering = false;
+                window.scrollTo(0, scrollY);
+                return;
+            }
             
             const tabsById = new Map(tabs.map(tab => [tab.id, tab]));
             const suspendedCount = tabs.filter(t => t.discarded).length;
@@ -296,31 +551,6 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
 
-            } else if (currentView === 'notes') {
-                // Notes View
-                windowsContainer.className = 'note-view-grid'; // Use grid layout
-                let noteCount = 0;
-                
-                // Check local tabs
-                if (storageData) {
-                    tabs.forEach(tab => {
-                        if (!tab.url) return;
-                        const noteKey = `note_${tab.url}`;
-                        const noteContent = storageData[noteKey];
-                        if (noteContent && noteContent.trim().length > 0) {
-                            noteCount++;
-                            const cardId = `note-card-${tab.id}`;
-                            newCardData.set(cardId, {
-                                id: cardId,
-                                type: 'note',
-                                tab: tab,
-                                content: noteContent
-                            });
-                        }
-                    });
-                }
-                statsEl.innerHTML = `<strong>${noteCount}</strong> notes found`;
-
             } else { // 'domain' view
                 const tabsByDomain = tabs.reduce((acc, tab) => {
                     const domain = getDomain(tab.url);
@@ -379,108 +609,12 @@ document.addEventListener('DOMContentLoaded', () => {
             let animationIndex = 0;
 
             // Update existing cards and create new ones
-            if (currentView !== 'notes') {
-                windowsContainer.className = 'windows-grid';
-            }
+            // Ensure we are in grid mode
+            windowsContainer.className = 'windows-grid';
             
             newCardData.forEach(data => {
                 const existingCard = document.getElementById(data.id);
                 
-                            if (data.type === 'note') {
-                                if (existingCard) {
-                                    // Update content if needed (simple replacement for now)
-                                    const contentEl = existingCard.querySelector('.note-card-content');
-                                    if (contentEl.value !== data.content) contentEl.value = data.content;
-                                } else {
-                                    const card = document.createElement('div');                        card.className = 'note-card card-enter';
-                        card.id = data.id;
-                        
-                        const faviconUrl = data.tab.favIconUrl || `data:image/svg+xml;base64,${btoa('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="#ccc"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/></svg>')}`;
-                        
-                        const header = document.createElement('div');
-                        header.className = 'note-card-header';
-                        
-                        const img = document.createElement('img');
-                        img.src = faviconUrl;
-                        img.width = 16;
-                        img.height = 16;
-                        img.style.flexShrink = '0';
-                        
-                        const title = document.createElement('span');
-                        title.className = 'note-card-title';
-                        title.textContent = data.tab.title;
-                        
-                        header.appendChild(img);
-                        header.appendChild(title);
-                        
-                                            const content = document.createElement('textarea');
-                                            content.className = 'note-card-content';
-                                            content.value = data.content;
-                                            content.placeholder = "Add your notes here...";
-                                            
-                                                                const footer = document.createElement('div');
-                                                                footer.className = 'note-card-footer';
-                                                                
-                                                                const deleteBtn = document.createElement('button');
-                                                                deleteBtn.className = 'note-action-btn note-delete-btn';
-                                                                deleteBtn.textContent = 'Delete';
-                                                                deleteBtn.style.color = '#ef4444';
-                                                                deleteBtn.style.borderColor = '#fca5a5';
-                                                                deleteBtn.style.marginRight = 'auto'; // Push to left
-                                            
-                                                                const btn = document.createElement('button');
-                                                                btn.className = 'note-action-btn';
-                                                                btn.textContent = 'Go to Tab';
-                                                                
-                                                                footer.appendChild(deleteBtn);
-                                                                footer.appendChild(btn);
-                                                                
-                                                                card.appendChild(header);
-                                                                card.appendChild(content);
-                                                                card.appendChild(footer);
-                                                                
-                                                                const jumpToTab = async () => {
-                                                                    await chrome.tabs.update(data.tab.id, { active: true });
-                                                                    if (data.tab.windowId) await chrome.windows.update(data.tab.windowId, { focused: true });
-                                                                };
-                                            
-                                                                const deleteNote = async (e) => {
-                                                                    e.stopPropagation();
-                                                                    if (confirm('Are you sure you want to delete this note?')) {
-                                                                        const noteKey = `note_${data.tab.url}`;
-                                                                        await chrome.storage.local.remove(noteKey);
-                                                                        
-                                                                        card.style.opacity = '0';
-                                                                        card.style.transform = 'scale(0.9)';
-                                                                        setTimeout(() => {
-                                                                            card.remove();
-                                                                            // Update stats manually or let re-render handle it
-                                                                            const currentCount = parseInt(statsEl.querySelector('strong').textContent);
-                                                                            statsEl.innerHTML = `<strong>${Math.max(0, currentCount - 1)}</strong> notes found`;
-                                                                        }, 300);
-                                                                    }
-                                                                };
-                                            
-                                                                header.addEventListener('click', jumpToTab);
-                                                                btn.addEventListener('click', jumpToTab);
-                                                                deleteBtn.addEventListener('click', deleteNote);
-                                                                
-                                                                // Auto-save logic
-                                                                let saveTimeout;                                            content.addEventListener('input', () => {
-                                                clearTimeout(saveTimeout);
-                                                saveTimeout = setTimeout(() => {
-                                                    const noteKey = `note_${data.tab.url}`;
-                                                    const newContent = content.value;
-                                                    const storageUpdate = {};
-                                                    storageUpdate[noteKey] = newContent;
-                                                    chrome.storage.local.set(storageUpdate);
-                                                }, 500);
-                                            });
-                                            
-                                            fragment.appendChild(card);                    }
-                    return;
-                }
-
                 if (existingCard) {
                     // Update header
                     const header = existingCard.querySelector('.window-header');
@@ -555,6 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
     chrome.tabs.onMoved.addListener(debouncedRender);
     chrome.tabs.onAttached.addListener(debouncedRender);
     chrome.tabs.onDetached.addListener(debouncedRender);
+    chrome.storage.onChanged.addListener(debouncedRender);
 
     updateView(currentView);
 });
